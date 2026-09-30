@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --background: #06130e;
+  --panel: rgba(10, 25, 18, 0.78);
+  --panel-strong: rgba(15, 30, 22, 0.96);
+  --line: rgba(148, 163, 184, 0.22);
+  --text: #e6f4ea;
+  --muted: #9db4a6;
+  --grass-1: #113b2a;
+  --grass-2: #1f5d3d;
+  --grass-3: #122e1f;
+  --accent: #66d9ef;
+  --gold: #f6c453;
+  --danger: #ff6b6b;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top, rgba(34, 197, 94, 0.12), transparent 24%),
+    linear-gradient(180deg, #040d09 0%, #081b13 42%, #06130e 100%);
+  color: var(--text);
+}
+
+body {
+  min-height: 100vh;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 22px 22px;
+  pointer-events: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.pitch-surface {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(23, 82, 48, 0.92), rgba(11, 43, 27, 0.96)),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.02),
+      rgba(255, 255, 255, 0.02) 2px,
+      transparent 2px,
+      transparent 8px
+    );
+}
+
+.pitch-surface::before,
+.pitch-surface::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pitch-surface::before {
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.09), transparent 50%);
+}
+
+.pitch-surface::after {
+  inset: 12% 8%;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-radius: 32px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.wheel-segment {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  width: 10rem;
+  text-align: center;
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
