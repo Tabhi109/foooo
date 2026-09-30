@@ -1,36 +1,65 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import confetti from 'canvas-confetti';
+import { motion } from 'framer-motion';
 import { ArrowRight, CircleDollarSign, ShieldCheck, Sparkles, Trophy, Zap } from 'lucide-react';
 import { FootballPitch } from '@/components/FootballPitch';
 import { PlayerRosterModal } from '@/components/PlayerRosterModal';
 import { SpinnerWheel, type SpinnerWheelHandle } from '@/components/SpinnerWheel';
-import { getClubRoster, useGameStore } from '@/lib/store';
+import { formationOrder, getFormationSlots } from '@/lib/formations';
+import { useGameStore } from '@/lib/store';
 
 export default function HomePage() {
   const {
     selectedLeagueId,
     leagueOptions,
+    clubOptions,
+    clubRoster,
     currentStage,
     formation,
     spinResult,
     draftSlots,
     rerollsRemaining,
     activeSlotId,
+    simulationResult,
+    isLoading,
+    error,
+    loadLeagues,
     setSelectedLeague,
     spinFormation,
-    spinClub,
     rerollClub,
     assignPlayerToSlot,
     selectSlot,
     finalizeDraft,
+    runSimulation,
+    reset,
   } = useGameStore();
 
   const [showRoster, setShowRoster] = useState(false);
-  const wheelRef = useRef<SpinnerWheelHandle>(null);
+  const clubWheelRef = useRef<SpinnerWheelHandle>(null);
+  const formationWheelRef = useRef<SpinnerWheelHandle>(null);
 
-  const selectedLeague = leagueOptions.find((league) => league.id === selectedLeagueId) ?? leagueOptions[0];
-  const clubRoster = useMemo(() => (spinResult ? getClubRoster(spinResult.id) : []), [spinResult]);
+  useEffect(() => {
+    void loadLeagues();
+  }, [loadLeagues]);
+
+  useEffect(() => {
+    if (currentStage === 'SIMULATION' && draftSlots.filter((slot) => slot.playerId).length === 11) {
+      void runSimulation();
+    }
+  }, [currentStage, draftSlots, runSimulation]);
+
+  useEffect(() => {
+    if (currentStage === 'SUMMARY' && simulationResult?.rank === 1) {
+      confetti({ particleCount: 180, spread: 90, origin: { y: 0.7 } });
+    }
+  }, [currentStage, simulationResult]);
+
+  const selectedLeague = useMemo(
+    () => leagueOptions.find((league) => league.id === selectedLeagueId) ?? null,
+    [leagueOptions, selectedLeagueId],
+  );
 
   const activeSlot = draftSlots.find((slot) => slot.id === activeSlotId) ?? null;
   const filledSlots = draftSlots.filter((slot) => slot.playerId).length;
@@ -45,14 +74,22 @@ export default function HomePage() {
     setShowRoster(false);
   };
 
+  const handleClubSpin = () => {
+    clubWheelRef.current?.spin();
+  };
+
+  const handleFormationSpin = () => {
+    formationWheelRef.current?.spin();
+  };
+
   const leagueCards = leagueOptions.map((league) => (
     <button
       key={league.id}
-      onClick={() => setSelectedLeague(league.id)}
+      onClick={() => void setSelectedLeague(league.id)}
       className="group flex items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900/70 p-3 text-left transition hover:border-cyan-400 hover:bg-slate-800"
     >
       <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-slate-800">
-        <img src={league.logoUrl} alt={league.name} className="h-full w-full object-cover" />
+        <img src={league.logoUrl ?? undefined} alt={league.name} className="h-full w-full object-cover" />
       </div>
       <div>
         <p className="text-sm font-semibold text-white">{league.name}</p>
@@ -73,7 +110,7 @@ export default function HomePage() {
         <div className="flex items-center gap-3 text-sm text-slate-300">
           <div className="rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2">
             <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">League</div>
-            <div className="font-medium text-white">{selectedLeague.name}</div>
+            <div className="font-medium text-white">{selectedLeague?.name ?? '—'}</div>
           </div>
           <div className="rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2">
             <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Formation</div>
@@ -82,6 +119,8 @@ export default function HomePage() {
         </div>
       </div>
 
+      {error && <div className="mb-6 rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div>}
+
       {currentStage === 'SELECT_LEAGUE' && (
         <section className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
           <div className="rounded-3xl border border-slate-800 bg-slate-950/60 p-6 shadow-glow">
@@ -89,7 +128,7 @@ export default function HomePage() {
               <ShieldCheck className="text-cyan-300" />
               <h2 className="text-2xl font-bold text-white">Select a league</h2>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">{leagueCards}</div>
+            {isLoading ? <p className="text-slate-300">Loading leagues...</p> : <div className="grid gap-3 sm:grid-cols-2">{leagueCards}</div>}
           </div>
 
           <div className="rounded-3xl border border-emerald-500/25 bg-emerald-500/10 p-6">
@@ -107,7 +146,7 @@ export default function HomePage() {
         </section>
       )}
 
-      {currentStage === 'SPIN_FORMATION' && (
+      {currentStage === 'SPIN_FORMATION' && selectedLeague && (
         <section className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
           <div className="rounded-3xl border border-slate-800 bg-slate-950/60 p-6">
             <div className="mb-4 flex items-center justify-between">
@@ -116,13 +155,30 @@ export default function HomePage() {
                 <h2 className="text-2xl font-bold text-white">Formation spin</h2>
               </div>
               <button
-                onClick={spinFormation}
+                onClick={handleFormationSpin}
                 className="inline-flex items-center gap-2 rounded-full bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
               >
                 <Zap size={16} /> Spin
               </button>
             </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+
+            <SpinnerWheel
+              ref={formationWheelRef}
+              items={formationOrder}
+              getLabel={(item) => item}
+              onStop={(item) => {
+                useGameStore.setState({
+                  formation: item,
+                  draftSlots: getFormationSlots(item).map((slot) => ({ ...slot, playerId: null })),
+                  currentStage: 'SPIN_FORMATION',
+                  activeSlotId: null,
+                  spinResult: null,
+                  rerollsRemaining: 2,
+                });
+              }}
+            />
+
+            <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
               <div className="mb-3 flex items-center justify-between text-sm text-slate-300">
                 <span>Current format</span>
                 <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-emerald-300">{formation}</span>
@@ -149,12 +205,15 @@ export default function HomePage() {
                 <span>Available rerolls</span>
                 <span>{rerollsRemaining}</span>
               </div>
+              <button onClick={() => spinFormation()} className="mt-2 w-full rounded-full bg-emerald-500 px-4 py-3 font-semibold text-slate-950 transition hover:bg-emerald-400">
+                Confirm formation
+              </button>
             </div>
           </div>
         </section>
       )}
 
-      {currentStage === 'PITCH_DRAFT' && (
+      {currentStage === 'PITCH_DRAFT' && selectedLeague && (
         <section className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-[0.9fr_1.2fr]">
             <div className="rounded-3xl border border-slate-800 bg-slate-950/60 p-4">
@@ -163,10 +222,7 @@ export default function HomePage() {
                   <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Stage 3</p>
                   <h2 className="text-xl font-bold text-white">Club spin</h2>
                 </div>
-                <button
-                  onClick={() => wheelRef.current?.spin()}
-                  className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
-                >
+                <button onClick={handleClubSpin} className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400">
                   Spin club
                 </button>
               </div>
@@ -176,11 +232,16 @@ export default function HomePage() {
               </div>
 
               <SpinnerWheel
-                ref={wheelRef}
-                items={useGameStore.getState().clubOptions.filter((club) => club.leagueId === selectedLeagueId)}
+                ref={clubWheelRef}
+                items={clubOptions.filter((club) => club.leagueId === selectedLeagueId)}
                 getLabel={(club) => club.shortName}
                 onStop={(club) => {
-                  useGameStore.setState({ spinResult: club });
+                  useGameStore.setState({
+                    spinResult: club,
+                    clubRoster: useGameStore.getState().rosterByClub[club.id] ?? [],
+                    activeSlotId: useGameStore.getState().draftSlots[0]?.id ?? null,
+                    rerollsRemaining: 2,
+                  });
                 }}
               />
 
@@ -188,7 +249,7 @@ export default function HomePage() {
                 <div className="mt-5 flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/80 p-3">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-slate-800">
-                      <img src={spinResult.logoUrl} alt={spinResult.name} className="h-full w-full object-cover" />
+                      <img src={spinResult.logoUrl ?? undefined} alt={spinResult.name} className="h-full w-full object-cover" />
                     </div>
                     <div>
                       <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Spun club</p>
@@ -213,7 +274,7 @@ export default function HomePage() {
                   <h2 className="text-xl font-bold text-white">{formation} setup</h2>
                 </div>
                 <button
-                  onClick={finalizeDraft}
+                  onClick={() => finalizeDraft()}
                   disabled={filledSlots < 11}
                   className="inline-flex items-center gap-2 rounded-full bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -268,6 +329,93 @@ export default function HomePage() {
               </div>
             </div>
           )}
+        </section>
+      )}
+
+      {currentStage === 'SIMULATION' && (
+        <section className="rounded-3xl border border-slate-800 bg-slate-950/60 p-6">
+          <div className="mb-3 flex items-center gap-3 text-cyan-300">
+            <Zap size={18} />
+            <p className="text-xs uppercase tracking-[0.24em]">Simulation</p>
+          </div>
+          <p className="text-2xl font-bold text-white">Running match engine...</p>
+          <div className="mt-4 flex flex-wrap gap-2 text-sm text-slate-300">
+            {draftSlots.filter((slot) => slot.playerId).slice(0, 6).map((slot) => (
+              <span key={slot.id} className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5">{slot.label}</span>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {currentStage === 'SUMMARY' && simulationResult && (
+        <section className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-[0.75fr_1.5fr]">
+            <div className="rounded-3xl border border-emerald-500/25 bg-emerald-500/10 p-6">
+              <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Final position</p>
+              <div className="mt-4 text-5xl font-black text-white">#{simulationResult.rank}</div>
+              <div className="mt-6 space-y-3 text-sm text-slate-200">
+                <div className="flex items-center justify-between"><span>W-D-L</span><span>{simulationResult.record.wins}-{simulationResult.record.draws}-{simulationResult.record.losses}</span></div>
+                <div className="flex items-center justify-between"><span>Points</span><span>{simulationResult.record.points}</span></div>
+                <div className="flex items-center justify-between"><span>GD</span><span>{simulationResult.record.goalDifference}</span></div>
+              </div>
+              <button onClick={() => reset()} className="mt-6 w-full rounded-full bg-white px-4 py-3 font-semibold text-slate-950 transition hover:bg-slate-200">
+                Draft Again
+              </button>
+            </div>
+
+            <div className="rounded-3xl border border-slate-800 bg-slate-950/60 p-6">
+              <div className="mb-5 flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">League table</p>
+                  <h3 className="text-2xl font-bold text-white">{simulationResult.leagueName}</h3>
+                </div>
+                <div className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-300">Season end</div>
+              </div>
+
+              <div className="overflow-hidden rounded-2xl border border-slate-800">
+                <div className="grid grid-cols-[42px_1fr_50px_50px_50px_60px_60px] gap-2 bg-slate-900/80 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-slate-400">
+                  <span>#</span>
+                  <span>Club</span>
+                  <span>W</span>
+                  <span>D</span>
+                  <span>L</span>
+                  <span>GD</span>
+                  <span>Pts</span>
+                </div>
+                {simulationResult.table.slice(0, 8).map((row) => (
+                  <div key={row.club} className="grid grid-cols-[42px_1fr_50px_50px_50px_60px_60px] gap-2 border-t border-slate-800 px-3 py-2 text-sm text-slate-200">
+                    <span>{row.rank}</span>
+                    <span>{row.club}</span>
+                    <span>{row.wins}</span>
+                    <span>{row.draws}</span>
+                    <span>{row.losses}</span>
+                    <span>{row.goalDifference}</span>
+                    <span>{row.points}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-950/60 p-6">
+            <p className="mb-4 text-xs uppercase tracking-[0.2em] text-slate-400">Match ticker</p>
+            <div className="flex flex-col gap-3">
+              {simulationResult.goalEvents.slice(0, 8).map((event, index) => (
+                <motion.div
+                  key={`${event.minute}-${event.scorer}-${index}`}
+                  initial={{ opacity: 0, x: -18 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/70 px-4 py-3"
+                >
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">{event.minute}′</div>
+                    <div className="font-semibold text-white">{event.scorer}</div>
+                  </div>
+                  <div className="text-sm text-slate-300">{event.team}</div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
         </section>
       )}
 

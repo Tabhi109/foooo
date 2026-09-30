@@ -10,7 +10,7 @@ const leagueTemplates = [
   { name: 'Serie A', country: 'Italy', logoUrl: 'https://images.unsplash.com/photo-1530904578637-59d47a1e7e4b?auto=format&fit=crop&w=200&q=80' },
   { name: 'Bundesliga', country: 'Germany', logoUrl: 'https://images.unsplash.com/photo-1547347298-4074fc3086f0?auto=format&fit=crop&w=200&q=80' },
   { name: 'International', country: 'World', logoUrl: 'https://images.unsplash.com/photo-1511884642898-4c92249e20b6?auto=format&fit=crop&w=200&q=80' },
-] as const;
+];
 
 const leagueTeams = {
   'Premier League': [
@@ -102,7 +102,7 @@ async function seed() {
   await db.delete(teams);
   await db.delete(leagues);
 
-  const insertedLeagues = await db.insert(leagues).values(leagueTemplates).returning({ id: leagues.id, name: leagues.name });
+  const insertedLeagues = await db.insert(leagues).values([...leagueTemplates]).returning({ id: leagues.id, name: leagues.name });
   const leagueLookup = new Map(insertedLeagues.map((league) => [league.name, league.id]));
 
   const teamInsertRows: Array<{ leagueId: number; name: string; shortName: string; logoUrl: string | null; baseRating: number }> = [];

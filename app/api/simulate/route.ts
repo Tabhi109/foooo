@@ -44,9 +44,10 @@ function buildLeagueTable(entries: Array<{ club: string; wins: number; draws: nu
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { leagueId, playerIds } = body ?? {};
+    const { leagueId, league_id: leagueIdSnake, playerIds } = body ?? {};
+    const resolvedLeagueId = Number(leagueId ?? leagueIdSnake);
 
-    if (!leagueId || !Array.isArray(playerIds) || playerIds.length !== 11) {
+    if (!resolvedLeagueId || !Array.isArray(playerIds) || playerIds.length !== 11) {
       return NextResponse.json({ error: 'Expected 11 player IDs and a league_id.' }, { status: 400 });
     }
 
@@ -55,11 +56,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'One or more player IDs are invalid.' }, { status: 400 });
     }
 
-    const leagueRows = await db.select().from(leagues).where(eq(leagues.id, Number(leagueId)));
+    const leagueRows = await db.select().from(leagues).where(eq(leagues.id, resolvedLeagueId));
     const league = leagueRows[0];
 
     const draftPlayers = await db.select().from(players).where(inArray(players.id, normalizedIds));
-    const teamRows = await db.select().from(teams).where(eq(teams.leagueId, Number(leagueId)));
+    const teamRows = await db.select().from(teams).where(eq(teams.leagueId, resolvedLeagueId));
 
     const userRating = draftPlayers.reduce((sum, player) => sum + player.rating, 0) / draftPlayers.length;
 
@@ -68,11 +69,11 @@ export async function POST(request: Request) {
     ];
 
     const opponents = teamRows.length > 0 ? teamRows : [
-      { id: 101, leagueId: Number(leagueId), name: 'City', shortName: 'CIT', logoUrl: '', baseRating: 84 },
-      { id: 102, leagueId: Number(leagueId), name: 'United', shortName: 'UNI', logoUrl: '', baseRating: 83 },
-      { id: 103, leagueId: Number(leagueId), name: 'Rovers', shortName: 'ROV', logoUrl: '', baseRating: 82 },
-      { id: 104, leagueId: Number(leagueId), name: 'Wolves', shortName: 'WOL', logoUrl: '', baseRating: 80 },
-      { id: 105, leagueId: Number(leagueId), name: 'Athletic', shortName: 'ATH', logoUrl: '', baseRating: 81 },
+      { id: 101, leagueId: resolvedLeagueId, name: 'City', shortName: 'CIT', logoUrl: '', baseRating: 84 },
+      { id: 102, leagueId: resolvedLeagueId, name: 'United', shortName: 'UNI', logoUrl: '', baseRating: 83 },
+      { id: 103, leagueId: resolvedLeagueId, name: 'Rovers', shortName: 'ROV', logoUrl: '', baseRating: 82 },
+      { id: 104, leagueId: resolvedLeagueId, name: 'Wolves', shortName: 'WOL', logoUrl: '', baseRating: 80 },
+      { id: 105, leagueId: resolvedLeagueId, name: 'Athletic', shortName: 'ATH', logoUrl: '', baseRating: 81 },
     ];
 
     const eventLog: Array<{ minute: number; scorer: string; team: string; outcome: 'home' | 'away' }> = [];
