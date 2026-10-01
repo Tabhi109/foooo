@@ -47,6 +47,7 @@ export const players = pgTable(
     position: positionEnum('position').notNull(),
     category: categoryEnum('category').notNull(),
     rating: integer('rating').notNull(),
+    nationality: text('nationality').default('World'),
     photoUrl: text('photo_url'),
   },
   (table) => ({

@@ -1,5 +1,12 @@
 import { create } from 'zustand';
-import { formationOrder, getFormationSlots, type FormationName, type FormationSlot, type PositionCategory } from '@/lib/formations';
+import {
+  formationOrder,
+  getFormationSlots,
+  FORMATION_LINKS,
+  type FormationName,
+  type FormationSlot,
+  type PositionCategory,
+} from '@/lib/formations';
 
 export type GameStage = 'SELECT_LEAGUE' | 'SPIN_FORMATION' | 'PITCH_DRAFT' | 'SIMULATION' | 'SUMMARY';
 
@@ -25,6 +32,8 @@ export type DraftedPlayer = {
   position: string;
   category: PositionCategory;
   rating: number;
+  nationality?: string;
+  photoUrl?: string | null;
   teamId: number;
   teamName: string;
 };
@@ -65,18 +74,80 @@ export type MatchResult = {
 
 export type DraftSlot = FormationSlot & {
   playerId: string | null;
+  player: DraftedPlayer | null;
 };
+
+export type ChemistryLink = {
+  from: string;
+  to: string;
+  strength: 'strong' | 'medium' | 'weak' | 'none';
+};
+
+export function calculateChemistry(
+  slots: DraftSlot[],
+  formation: FormationName,
+): { score: number; links: ChemistryLink[] } {
+  const linksDef = FORMATION_LINKS[formation] || [];
+  const slotMap = new Map(slots.map((s) => [s.id, s]));
+  const evaluatedLinks: ChemistryLink[] = [];
+
+  let totalPoints = 0;
+  let possiblePoints = 0;
+
+  for (const [fromId, toId] of linksDef) {
+    const slotA = slotMap.get(fromId);
+    const slotB = slotMap.get(toId);
+    if (!slotA || !slotB) continue;
+
+    possiblePoints += 3;
+
+    if (!slotA.player || !slotB.player) {
+      evaluatedLinks.push({ from: fromId, to: toId, strength: 'none' });
+      continue;
+    }
+
+    const playerA = slotA.player;
+    const playerB = slotB.player;
+
+    const sameClub = playerA.teamId === playerB.teamId;
+    const sameNation =
+      Boolean(playerA.nationality) &&
+      Boolean(playerB.nationality) &&
+      playerA.nationality === playerB.nationality;
+
+    if (sameClub) {
+      totalPoints += 3;
+      evaluatedLinks.push({ from: fromId, to: toId, strength: 'strong' });
+    } else if (sameNation) {
+      totalPoints += 2;
+      evaluatedLinks.push({ from: fromId, to: toId, strength: 'medium' });
+    } else {
+      totalPoints += 1;
+      evaluatedLinks.push({ from: fromId, to: toId, strength: 'weak' });
+    }
+  }
+
+  const assignedCount = slots.filter((s) => s.player).length;
+  if (assignedCount === 0 || possiblePoints === 0) {
+    return { score: 0, links: evaluatedLinks };
+  }
+
+  const percentage = Math.round((totalPoints / possiblePoints) * 100);
+  return { score: Math.min(100, Math.max(0, percentage)), links: evaluatedLinks };
+}
 
 const createDraftSlots = (formation: FormationName): DraftSlot[] =>
   getFormationSlots(formation).map((slot) => ({
     ...slot,
     playerId: null,
+    player: null,
   }));
 
 const initialState = {
   currentStage: 'SELECT_LEAGUE' as GameStage,
   selectedLeagueId: 0,
   formation: '4-3-3' as FormationName,
+  draftRound: 1,
   leagueOptions: [] as LeagueOption[],
   clubOptions: [] as ClubOption[],
   clubRoster: [] as DraftedPlayer[],
@@ -85,6 +156,9 @@ const initialState = {
   activeSlotId: null as string | null,
   draftSlots: createDraftSlots('4-3-3'),
   rosterByClub: {} as Record<number, DraftedPlayer[]>,
+  teamRating: 0,
+  teamChemistry: 0,
+  chemistryLinks: [] as ChemistryLink[],
   simulationResult: null as MatchResult | null,
   isLoading: false,
   error: null as string | null,
@@ -95,6 +169,7 @@ type GameStore = typeof initialState & {
   loadLeagueContext: (leagueId: number) => Promise<void>;
   setSelectedLeague: (leagueId: number) => Promise<void>;
   spinFormation: () => void;
+  confirmFormation: () => void;
   spinClub: () => void;
   rerollClub: () => void;
   selectSlot: (slotId: string) => void;
@@ -106,6 +181,7 @@ type GameStore = typeof initialState & {
 
 export const useGameStore = create<GameStore>((set, get) => ({
   ...initialState,
+
   loadLeagues: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -121,6 +197,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       });
     }
   },
+
   loadLeagueContext: async (leagueId) => {
     set({ isLoading: true, error: null });
     try {
@@ -130,6 +207,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const teams = Array.isArray(data.teams) ? data.teams : [];
       const players = Array.isArray(data.players) ? data.players : [];
       const rosterByClub: Record<number, DraftedPlayer[]> = {};
+
       for (const team of teams) {
         const teamId = Number(team.id);
         rosterByClub[teamId] = players
@@ -145,10 +223,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
         selectedLeagueId: leagueId,
         clubOptions: teams,
         rosterByClub,
-        clubRoster: rosterByClub[teams[0]?.id ?? 0] ?? [],
+        clubRoster: [],
         spinResult: null,
         rerollsRemaining: 2,
         activeSlotId: null,
+        draftRound: 1,
+        teamRating: 0,
+        teamChemistry: 0,
+        chemistryLinks: [],
         draftSlots: createDraftSlots(get().formation),
         currentStage: 'SPIN_FORMATION',
         isLoading: false,
@@ -160,9 +242,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       });
     }
   },
+
   setSelectedLeague: async (leagueId) => {
     await get().loadLeagueContext(leagueId);
   },
+
   spinFormation: () => {
     const next = formationOrder[Math.floor(Math.random() * formationOrder.length)];
     set({
@@ -172,61 +256,125 @@ export const useGameStore = create<GameStore>((set, get) => ({
       activeSlotId: null,
       spinResult: null,
       rerollsRemaining: 2,
+      teamRating: 0,
+      teamChemistry: 0,
+      chemistryLinks: [],
     });
   },
+
+  confirmFormation: () => {
+    const { clubOptions, formation, rosterByClub } = get();
+    if (clubOptions.length === 0) return;
+
+    // Pick first random club for Round 1
+    const firstClub = clubOptions[Math.floor(Math.random() * clubOptions.length)];
+    const slots = createDraftSlots(formation);
+
+    set({
+      currentStage: 'PITCH_DRAFT',
+      draftRound: 1,
+      spinResult: firstClub,
+      clubRoster: rosterByClub[firstClub.id] ?? [],
+      rerollsRemaining: 2,
+      activeSlotId: slots[0]?.id ?? null,
+      draftSlots: slots,
+      teamRating: 0,
+      teamChemistry: 0,
+      chemistryLinks: [],
+    });
+  },
+
   spinClub: () => {
-    const { clubOptions } = get();
+    const { clubOptions, rosterByClub } = get();
     if (clubOptions.length === 0) return;
     const next = clubOptions[Math.floor(Math.random() * clubOptions.length)];
     set({
       spinResult: next,
-      currentStage: 'PITCH_DRAFT',
-      rerollsRemaining: 2,
-      activeSlotId: get().draftSlots[0]?.id ?? null,
-      clubRoster: get().rosterByClub[next.id] ?? [],
+      clubRoster: rosterByClub[next.id] ?? [],
     });
   },
+
   rerollClub: () => {
-    const { clubOptions, rerollsRemaining, spinResult } = get();
+    const { clubOptions, rerollsRemaining, spinResult, rosterByClub } = get();
     if (rerollsRemaining <= 0 || clubOptions.length === 0) return;
     const eligible = clubOptions.filter((club) => club.id !== spinResult?.id);
     const next = eligible[Math.floor(Math.random() * Math.max(eligible.length, 1))] ?? clubOptions[0];
+
     set({
       spinResult: next,
       rerollsRemaining: rerollsRemaining - 1,
-      activeSlotId: get().draftSlots[0]?.id ?? null,
-      clubRoster: get().rosterByClub[next.id] ?? [],
+      clubRoster: rosterByClub[next.id] ?? [],
     });
   },
+
   selectSlot: (slotId) => {
     set({ activeSlotId: slotId });
   },
+
   assignPlayerToSlot: (playerId, slotId) => {
-    const { draftSlots, clubRoster, spinResult } = get();
+    const { draftSlots, clubRoster, formation, clubOptions, rosterByClub, draftRound } = get();
     const slot = draftSlots.find((entry) => entry.id === slotId);
     const player = clubRoster.find((candidate) => candidate.id === playerId);
 
-    if (!slot || !player || !spinResult) return;
+    if (!slot || !player) return;
 
     const matchesSlot =
       player.category === slot.position ||
-      (slot.position === 'DEF' && ['LB', 'CB', 'RB'].includes(player.position)) ||
+      (slot.position === 'DEF' && ['LB', 'CB', 'RB', 'LWB', 'RWB'].includes(player.position)) ||
       (slot.position === 'MID' && ['CM', 'CAM', 'LM', 'RM', 'DM'].includes(player.position)) ||
       (slot.position === 'FWD' && ['LW', 'RW', 'ST'].includes(player.position));
 
     if (!matchesSlot) return;
 
     const nextDraftSlots = draftSlots.map((entry) =>
-      entry.id === slotId ? { ...entry, playerId } : entry,
+      entry.id === slotId ? { ...entry, playerId, player } : entry,
     );
 
-    set({ draftSlots: nextDraftSlots, activeSlotId: slotId });
+    // Calculate updated ratings & chemistry
+    const assignedPlayers = nextDraftSlots.map((s) => s.player).filter(Boolean) as DraftedPlayer[];
+    const nextRating =
+      assignedPlayers.length > 0
+        ? Math.round(assignedPlayers.reduce((acc, p) => acc + p.rating, 0) / assignedPlayers.length)
+        : 0;
+
+    const { score: nextChemistry, links } = calculateChemistry(nextDraftSlots, formation);
+
+    const filledCount = assignedPlayers.length;
+
+    if (filledCount < 11 && clubOptions.length > 0) {
+      // Find next empty slot
+      const nextEmptySlot = nextDraftSlots.find((s) => !s.playerId);
+      // Spin next club for next round!
+      const nextClub = clubOptions[Math.floor(Math.random() * clubOptions.length)];
+
+      set({
+        draftSlots: nextDraftSlots,
+        draftRound: Math.min(11, draftRound + 1),
+        teamRating: nextRating,
+        teamChemistry: nextChemistry,
+        chemistryLinks: links,
+        spinResult: nextClub,
+        clubRoster: rosterByClub[nextClub.id] ?? [],
+        activeSlotId: nextEmptySlot?.id ?? null,
+      });
+    } else {
+      // All 11 filled
+      set({
+        draftSlots: nextDraftSlots,
+        teamRating: nextRating,
+        teamChemistry: nextChemistry,
+        chemistryLinks: links,
+        activeSlotId: null,
+      });
+    }
   },
+
   finalizeDraft: () => {
     const hasFullSquad = get().draftSlots.filter((slot) => slot.playerId).length === 11;
     if (!hasFullSquad) return;
     set({ currentStage: 'SIMULATION' });
   },
+
   runSimulation: async () => {
     const { draftSlots, selectedLeagueId } = get();
     const playerIds = draftSlots
@@ -258,6 +406,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       });
     }
   },
+
   reset: () => {
     set({
       ...initialState,
@@ -268,11 +417,3 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
   },
 }));
-
-export const getClubRoster = (clubId: number): DraftedPlayer[] => {
-  const store = useGameStore.getState();
-  return store.rosterByClub[clubId] ?? [];
-};
-
-export const getAvailableSlots = (formation: FormationName): DraftSlot[] =>
-  createDraftSlots(formation);
