@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { RefreshCw, Sparkles, Shield, Trophy } from 'lucide-react';
+import { RefreshCw, Sparkles, Shield } from 'lucide-react';
 import { type ClubOption, type DraftSlot, type DraftedPlayer } from '@/lib/store';
 
 type DraftReelProps = {
@@ -48,7 +48,7 @@ export function DraftReel({
             Pick {currentRound} of 11
           </span>
           <span className="text-xs text-slate-400 font-medium">
-            {openSlots.length} slots left
+            {openSlots.length} left
           </span>
         </div>
 
@@ -62,28 +62,27 @@ export function DraftReel({
         </button>
       </div>
 
-      {/* Drawn Club Card Hero */}
+      {/* Drawn Club Card Hero - Minimal Tactical Shield */}
       <motion.div
         key={club.id}
-        initial={{ scale: 0.92, opacity: 0 }}
+        initial={{ scale: 0.94, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 260, damping: 20 }}
-        className="my-4 flex items-center justify-between gap-4 rounded-2xl border border-slate-700/60 bg-slate-900/50 p-3.5"
+        className="my-4 flex items-center justify-between gap-4 rounded-2xl border border-slate-700/60 bg-slate-900/60 p-3.5"
       >
         <div className="flex items-center gap-3.5">
-          <div className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-slate-700 bg-slate-800 p-1 shadow-md">
-            <img
-              src={club.logoUrl || 'https://images.unsplash.com/photo-1547347298-4074fc3086f0?auto=format&fit=crop&w=120&q=80'}
-              alt={club.name}
-              className="h-full w-full object-cover"
-            />
+          {/* Tactical Club Crest Badge */}
+          <div className="flex h-12 w-12 flex-col items-center justify-center rounded-2xl border border-emerald-500/30 bg-gradient-to-b from-emerald-500/20 to-slate-900 shadow">
+            <Shield size={16} className="text-emerald-400 mb-0.5" />
+            <span className="text-[10px] font-black uppercase tracking-tight text-white">{club.shortName}</span>
           </div>
+
           <div>
-            <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-400">
-              <Sparkles size={11} /> Drawn Club
+            <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-emerald-400">
+              <Sparkles size={10} /> Drawn Club
             </div>
-            <h4 className="text-lg font-black tracking-tight text-white">{club.name}</h4>
-            <p className="text-xs text-slate-400">{club.shortName} • Base OVR {club.baseRating}</p>
+            <h4 className="text-base font-black tracking-tight text-white">{club.name}</h4>
+            <p className="text-xs text-slate-400">Club OVR {club.baseRating}</p>
           </div>
         </div>
 
@@ -97,7 +96,7 @@ export function DraftReel({
       {/* Recommended Open Slots for this Club */}
       <div>
         <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-          Tap an open position to fill:
+          Tap a position to fill:
         </p>
         <div className="flex flex-wrap gap-2">
           {openSlots.map((slot) => {

@@ -53,14 +53,14 @@ export function PlayerRosterModal({
             initial={{ y: 300, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 300, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 220, damping: 25 }}
-            className="relative z-10 w-full max-w-lg rounded-t-[2.5rem] border border-slate-700/80 bg-slate-950 p-5 shadow-2xl sm:rounded-[2rem]"
+            transition={{ type: 'spring', stiffness: 240, damping: 25 }}
+            className="relative z-10 w-full max-w-md rounded-t-[2.5rem] border border-slate-700/80 bg-slate-950 p-5 shadow-2xl sm:rounded-[2rem]"
           >
             {/* Modal Header */}
             <div className="mb-4 flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-cyan-300">
-                  <Sparkles size={11} /> Draft Pick
+                  <Sparkles size={11} /> Select Player
                 </span>
                 <h3 className="mt-1 text-xl font-black tracking-tight text-white">
                   {title}
@@ -78,50 +78,42 @@ export function PlayerRosterModal({
               </button>
             </div>
 
-            {/* Scrollable Player List */}
+            {/* Scrollable Player List without photos */}
             <div className="max-h-[55vh] space-y-2.5 overflow-y-auto pr-1">
               {recommendedPlayers.length === 0 ? (
                 <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-center">
                   <ShieldAlert className="mx-auto mb-2 text-amber-300" size={24} />
-                  <p className="text-sm font-semibold text-amber-200">No natural {activeSlot.label} ({activeSlot.position}) in this club</p>
-                  <p className="mt-1 text-xs text-slate-400">Try selecting another position on the pitch or reroll this club.</p>
+                  <p className="text-sm font-semibold text-amber-200">No {activeSlot.label} ({activeSlot.position}) in this club</p>
+                  <p className="mt-1 text-xs text-slate-400">Select another open slot on the pitch or reroll this club.</p>
                 </div>
               ) : (
                 recommendedPlayers.map((player) => (
                   <button
                     key={player.id}
                     onClick={() => onAssign(player.id, activeSlot.id)}
-                    className="group flex w-full items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/60 p-3 text-left transition-all duration-150 hover:border-cyan-400/80 hover:bg-slate-800/90 hover:shadow-[0_0_20px_rgba(34,211,238,0.15)]"
+                    className="group flex w-full items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/60 p-3.5 text-left transition-all duration-150 hover:border-cyan-400/80 hover:bg-slate-800/90 active:scale-98"
                   >
-                    <div className="flex items-center gap-3">
-                      {/* Player Avatar */}
-                      <div className="h-11 w-11 overflow-hidden rounded-xl border border-slate-700 bg-slate-800 shadow">
-                        <img
-                          src={player.photoUrl || 'https://images.unsplash.com/photo-1517849845537-4d257902454a?auto=format&fit=crop&w=150&q=80'}
-                          alt={player.name}
-                          className="h-full w-full object-cover object-top"
-                        />
-                      </div>
-                      <div>
-                        <p className="font-extrabold text-white group-hover:text-cyan-200">{player.name}</p>
-                        <div className="flex items-center gap-2 text-xs text-slate-400">
-                          <span className="font-bold uppercase tracking-wider text-cyan-400">{player.position}</span>
-                          <span>•</span>
-                          <span>{player.nationality || 'World'}</span>
-                        </div>
+                    <div>
+                      <p className="text-sm font-black text-white group-hover:text-cyan-200">
+                        {player.name}
+                      </p>
+                      <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
+                        <span className="font-extrabold uppercase text-cyan-400">{player.position}</span>
+                        <span>•</span>
+                        <span>{player.nationality || 'World'}</span>
                       </div>
                     </div>
 
                     {/* Overall Rating Badge */}
-                    <div className="flex h-10 w-10 flex-col items-center justify-center rounded-xl border border-amber-400/40 bg-gradient-to-b from-amber-400/20 to-amber-500/10 text-amber-300">
-                      <span className="text-sm font-black leading-none">{player.rating}</span>
+                    <div className="flex h-11 w-11 flex-col items-center justify-center rounded-xl border border-amber-400/40 bg-gradient-to-b from-amber-400/15 to-amber-500/5 text-amber-300">
+                      <span className="text-base font-black leading-none">{player.rating}</span>
                       <span className="text-[7px] font-bold uppercase tracking-wider text-amber-400/80">OVR</span>
                     </div>
                   </button>
                 ))
               )}
 
-              {/* Other players section if user wants to see */}
+              {/* Other players section */}
               {otherPlayers.length > 0 && (
                 <div className="pt-2">
                   <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-500">
