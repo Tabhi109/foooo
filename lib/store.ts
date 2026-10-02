@@ -8,7 +8,13 @@ import {
   type PositionCategory,
 } from '@/lib/formations';
 
-export type GameStage = 'SELECT_LEAGUE' | 'SPIN_FORMATION' | 'PITCH_DRAFT' | 'SIMULATION' | 'SUMMARY';
+export type GameStage =
+  | 'ENTER_NAME'
+  | 'SELECT_LEAGUE'
+  | 'SPIN_FORMATION'
+  | 'PITCH_DRAFT'
+  | 'SIMULATION'
+  | 'SUMMARY';
 
 export type LeagueOption = {
   id: number;
@@ -144,7 +150,8 @@ const createDraftSlots = (formation: FormationName): DraftSlot[] =>
   }));
 
 const initialState = {
-  currentStage: 'SELECT_LEAGUE' as GameStage,
+  currentStage: 'ENTER_NAME' as GameStage,
+  teamName: 'Apex XI',
   selectedLeagueId: 0,
   formation: '4-3-3' as FormationName,
   draftRound: 1,
@@ -154,6 +161,7 @@ const initialState = {
   spinResult: null as ClubOption | null,
   rerollsRemaining: 2,
   activeSlotId: null as string | null,
+  selectedPlayerForPlacement: null as DraftedPlayer | null,
   draftSlots: createDraftSlots('4-3-3'),
   rosterByClub: {} as Record<number, DraftedPlayer[]>,
   teamRating: 0,
@@ -165,14 +173,17 @@ const initialState = {
 };
 
 type GameStore = typeof initialState & {
+  setTeamName: (name: string) => void;
+  confirmTeamName: () => void;
   loadLeagues: () => Promise<void>;
   loadLeagueContext: (leagueId: number) => Promise<void>;
   setSelectedLeague: (leagueId: number) => Promise<void>;
-  spinFormation: () => void;
+  setFormation: (formation: FormationName) => void;
   confirmFormation: () => void;
   spinClub: () => void;
   rerollClub: () => void;
   selectSlot: (slotId: string) => void;
+  setSelectedPlayerForPlacement: (player: DraftedPlayer | null) => void;
   assignPlayerToSlot: (playerId: string, slotId: string) => void;
   finalizeDraft: () => void;
   runSimulation: () => Promise<void>;
@@ -181,6 +192,15 @@ type GameStore = typeof initialState & {
 
 export const useGameStore = create<GameStore>((set, get) => ({
   ...initialState,
+
+  setTeamName: (name: string) => {
+    set({ teamName: name, currentStage: 'SELECT_LEAGUE' });
+  },
+
+  confirmTeamName: () => {
+    const name = get().teamName.trim() || 'Apex XI';
+    set({ teamName: name, currentStage: 'SELECT_LEAGUE' });
+  },
 
   loadLeagues: async () => {
     set({ isLoading: true, error: null });
@@ -227,6 +247,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         spinResult: null,
         rerollsRemaining: 2,
         activeSlotId: null,
+        selectedPlayerForPlacement: null,
         draftRound: 1,
         teamRating: 0,
         teamChemistry: 0,
@@ -247,15 +268,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     await get().loadLeagueContext(leagueId);
   },
 
-  spinFormation: () => {
-    const next = formationOrder[Math.floor(Math.random() * formationOrder.length)];
+  setFormation: (formation: FormationName) => {
     set({
-      formation: next,
-      draftSlots: createDraftSlots(next),
-      currentStage: 'SPIN_FORMATION',
-      activeSlotId: null,
-      spinResult: null,
-      rerollsRemaining: 2,
+      formation,
+      draftSlots: createDraftSlots(formation),
       teamRating: 0,
       teamChemistry: 0,
       chemistryLinks: [],
@@ -277,6 +293,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       clubRoster: rosterByClub[firstClub.id] ?? [],
       rerollsRemaining: 2,
       activeSlotId: slots[0]?.id ?? null,
+      selectedPlayerForPlacement: null,
       draftSlots: slots,
       teamRating: 0,
       teamChemistry: 0,
@@ -285,12 +302,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   spinClub: () => {
-    const { clubOptions, rosterByClub } = get();
+    const { clubOptions, rosterByClub, spinResult } = get();
     if (clubOptions.length === 0) return;
-    const next = clubOptions[Math.floor(Math.random() * clubOptions.length)];
+    const eligible = clubOptions.filter((c) => c.id !== spinResult?.id);
+    const next = eligible[Math.floor(Math.random() * Math.max(eligible.length, 1))] ?? clubOptions[0];
+
     set({
       spinResult: next,
       clubRoster: rosterByClub[next.id] ?? [],
+      selectedPlayerForPlacement: null,
     });
   },
 
@@ -304,6 +324,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       spinResult: next,
       rerollsRemaining: rerollsRemaining - 1,
       clubRoster: rosterByClub[next.id] ?? [],
+      selectedPlayerForPlacement: null,
     });
   },
 
@@ -311,13 +332,40 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ activeSlotId: slotId });
   },
 
+  setSelectedPlayerForPlacement: (player) => {
+    set({ selectedPlayerForPlacement: player });
+  },
+
   assignPlayerToSlot: (playerId, slotId) => {
-    const { draftSlots, clubRoster, formation, clubOptions, rosterByClub, draftRound } = get();
+    const {
+      draftSlots,
+      clubRoster,
+      formation,
+      clubOptions,
+      rosterByClub,
+      draftRound,
+    } = get();
+
+    // 1. Strict duplicate check: player cannot be assigned anywhere in draftSlots
+    const alreadyDrafted = draftSlots.some((s) => s.playerId === playerId);
+    if (alreadyDrafted) return;
+
     const slot = draftSlots.find((entry) => entry.id === slotId);
-    const player = clubRoster.find((candidate) => candidate.id === playerId);
+    // Find player in current roster or rosterByClub
+    let player = clubRoster.find((candidate) => candidate.id === playerId);
+    if (!player) {
+      for (const list of Object.values(rosterByClub)) {
+        const found = list.find((p) => p.id === playerId);
+        if (found) {
+          player = found;
+          break;
+        }
+      }
+    }
 
     if (!slot || !player) return;
 
+    // Check position compatibility
     const matchesSlot =
       player.category === slot.position ||
       (slot.position === 'DEF' && ['LB', 'CB', 'RB', 'LWB', 'RWB'].includes(player.position)) ||
@@ -338,13 +386,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
         : 0;
 
     const { score: nextChemistry, links } = calculateChemistry(nextDraftSlots, formation);
-
     const filledCount = assignedPlayers.length;
 
     if (filledCount < 11 && clubOptions.length > 0) {
-      // Find next empty slot
       const nextEmptySlot = nextDraftSlots.find((s) => !s.playerId);
-      // Spin next club for next round!
       const nextClub = clubOptions[Math.floor(Math.random() * clubOptions.length)];
 
       set({
@@ -356,15 +401,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
         spinResult: nextClub,
         clubRoster: rosterByClub[nextClub.id] ?? [],
         activeSlotId: nextEmptySlot?.id ?? null,
+        selectedPlayerForPlacement: null,
       });
     } else {
-      // All 11 filled
       set({
         draftSlots: nextDraftSlots,
         teamRating: nextRating,
         teamChemistry: nextChemistry,
         chemistryLinks: links,
         activeSlotId: null,
+        selectedPlayerForPlacement: null,
       });
     }
   },
@@ -376,7 +422,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   runSimulation: async () => {
-    const { draftSlots, selectedLeagueId } = get();
+    const { draftSlots, selectedLeagueId, teamName } = get();
     const playerIds = draftSlots
       .filter((slot) => slot.playerId)
       .map((slot) => Number(slot.playerId))
@@ -390,7 +436,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const response = await fetch('/api/simulate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ league_id: selectedLeagueId, playerIds }),
+        body: JSON.stringify({ league_id: selectedLeagueId, playerIds, teamName }),
       });
 
       if (!response.ok) {
@@ -410,6 +456,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   reset: () => {
     set({
       ...initialState,
+      teamName: get().teamName,
       leagueOptions: get().leagueOptions,
       clubOptions: get().clubOptions,
       rosterByClub: get().rosterByClub,

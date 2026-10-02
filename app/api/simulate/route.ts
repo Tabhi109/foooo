@@ -44,8 +44,9 @@ function buildLeagueTable(entries: Array<{ club: string; wins: number; draws: nu
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { leagueId, league_id: leagueIdSnake, playerIds } = body ?? {};
+    const { leagueId, league_id: leagueIdSnake, playerIds, teamName } = body ?? {};
     const resolvedLeagueId = Number(leagueId ?? leagueIdSnake);
+    const resolvedTeamName = (typeof teamName === 'string' && teamName.trim()) || 'Your Draft XI';
 
     if (!resolvedLeagueId || !Array.isArray(playerIds) || playerIds.length !== 11) {
       return NextResponse.json({ error: 'Expected 11 player IDs and a league_id.' }, { status: 400 });
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
     const userRating = draftPlayers.reduce((sum, player) => sum + player.rating, 0) / draftPlayers.length;
 
     let fixtures: Array<{ club: string; wins: number; draws: number; losses: number; goalsFor: number; goalsAgainst: number; played: number; points: number }> = [
-      { club: 'Your Draft XI', wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, played: 0, points: 0 },
+      { club: resolvedTeamName, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, played: 0, points: 0 },
     ];
 
     const opponents = teamRows.length > 0 ? teamRows : [
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
       points: 0,
     }));
 
-    const tableEntries = [{ club: 'Your Draft XI', wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, played: 0, points: 0 }, ...opponentRecords];
+    const tableEntries = [{ club: resolvedTeamName, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, played: 0, points: 0 }, ...opponentRecords];
 
     for (let i = 0; i < opponents.length; i += 1) {
       const opponent = opponents[i];
@@ -97,13 +98,10 @@ export async function POST(request: Request) {
       const ourGoals = poissonRandom(clamp(0.8 + userRating / 25, 0.8, 2.2));
       const opponentGoals = poissonRandom(clamp(0.72 + enemyRating / 28, 0.75, 2.3));
 
-      const entries = tableEntries.find((entry) => entry.club === 'Your Draft XI');
+      const entries = tableEntries.find((entry) => entry.club === resolvedTeamName);
       const rivalEntry = tableEntries.find((entry) => entry.club === opponent.name);
 
       if (!entries || !rivalEntry) continue;
-
-      const homeScorer = `Draft ${i + 1}`;
-      const awayScorer = `${opponent.shortName || opponent.name} ${i + 1}`;
 
       if (ourGoals > opponentGoals) {
         entries.wins += 1;
@@ -131,10 +129,12 @@ export async function POST(request: Request) {
       for (let minuteIndex = 0; minuteIndex < goalCount; minuteIndex += 1) {
         const minute = 12 + (minuteIndex * 17) + ((minuteIndex * 3) % 12);
         if (minuteIndex < ourGoals) {
-          eventLog.push({ minute: clamp(minute, 9, 90), scorer: homeScorer, team: 'Your Draft XI', outcome: 'home' });
+          const scorer = draftPlayers[minuteIndex % draftPlayers.length]?.name || 'Attacker';
+          eventLog.push({ minute: clamp(minute, 8, 90), scorer, team: resolvedTeamName, outcome: 'home' });
         }
         if (minuteIndex < opponentGoals) {
-          eventLog.push({ minute: clamp(minute + 4, 10, 90), scorer: awayScorer, team: opponent.name, outcome: 'away' });
+          const scorer = `${opponent.shortName || opponent.name} Star`;
+          eventLog.push({ minute: clamp(minute + 4, 10, 90), scorer, team: opponent.name, outcome: 'away' });
         }
       }
     }
@@ -142,11 +142,12 @@ export async function POST(request: Request) {
     fixtures = tableEntries;
 
     const table = buildLeagueTable(fixtures);
-    const rank = table.findIndex((entry) => entry.club === 'Your Draft XI') + 1;
-    const currentRecord = table.find((entry) => entry.club === 'Your Draft XI');
+    const rank = table.findIndex((entry) => entry.club === resolvedTeamName) + 1;
+    const currentRecord = table.find((entry) => entry.club === resolvedTeamName);
 
     return NextResponse.json({
       league: league?.name ?? 'League',
+      userTeam: resolvedTeamName,
       rank: rank > 0 ? rank : 1,
       table,
       record: currentRecord

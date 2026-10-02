@@ -1,8 +1,8 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { X, ShieldAlert, Sparkles } from 'lucide-react';
-import { type DraftedPlayer } from '@/lib/store';
+import { X, ShieldAlert, Sparkles, CheckCircle2 } from 'lucide-react';
+import { type DraftedPlayer, type DraftSlot } from '@/lib/store';
 
 type SlotLike = {
   id: string;
@@ -15,6 +15,7 @@ type PlayerRosterModalProps = {
   title: string;
   players: DraftedPlayer[];
   activeSlot: SlotLike | null;
+  draftSlots?: DraftSlot[];
   clubName?: string;
   onAssign: (playerId: string, slotId: string) => void;
   onClose: () => void;
@@ -35,17 +36,19 @@ export function PlayerRosterModal({
   title,
   players,
   activeSlot,
+  draftSlots = [],
   clubName,
   onAssign,
   onClose,
 }: PlayerRosterModalProps) {
+  const draftedIds = new Set(draftSlots.map((s) => s.playerId).filter(Boolean));
   const recommendedPlayers = players.filter((player) => matchesSlot(player, activeSlot));
   const otherPlayers = players.filter((player) => !matchesSlot(player, activeSlot));
 
   return (
     <AnimatePresence>
       {open && activeSlot ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 p-0 sm:items-center sm:p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4 backdrop-blur-sm">
           {/* Backdrop click */}
           <div className="absolute inset-0" onClick={onClose} />
 
@@ -53,25 +56,25 @@ export function PlayerRosterModal({
             initial={{ y: 300, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 300, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 240, damping: 25 }}
-            className="relative z-10 w-full max-w-md rounded-t-[2.5rem] border border-slate-700/80 bg-slate-950 p-5 shadow-2xl sm:rounded-[2rem]"
+            transition={{ type: 'spring', stiffness: 260, damping: 28 }}
+            className="relative z-10 w-full max-w-md rounded-t-[2rem] border border-slate-200 bg-white p-5 shadow-2xl sm:rounded-[2rem]"
           >
             {/* Modal Header */}
-            <div className="mb-4 flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-cyan-300">
-                  <Sparkles size={11} /> Select Player
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-800">
+                  <Sparkles size={11} className="text-emerald-600" /> Slot Selection
                 </span>
-                <h3 className="mt-1 text-xl font-black tracking-tight text-white">
+                <h3 className="mt-1 text-xl font-black tracking-tight text-slate-900">
                   {title}
                 </h3>
                 {clubName && (
-                  <p className="text-xs font-semibold text-slate-400">Available from {clubName}</p>
+                  <p className="text-xs font-semibold text-slate-500">Available from {clubName}</p>
                 )}
               </div>
               <button
                 onClick={onClose}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 active:scale-95"
                 aria-label="Close roster"
               >
                 <X size={16} />
@@ -81,52 +84,67 @@ export function PlayerRosterModal({
             {/* Scrollable Player List without photos */}
             <div className="max-h-[55vh] space-y-2.5 overflow-y-auto pr-1">
               {recommendedPlayers.length === 0 ? (
-                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-center">
-                  <ShieldAlert className="mx-auto mb-2 text-amber-300" size={24} />
-                  <p className="text-sm font-semibold text-amber-200">No {activeSlot.label} ({activeSlot.position}) in this club</p>
-                  <p className="mt-1 text-xs text-slate-400">Select another open slot on the pitch or reroll this club.</p>
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-center">
+                  <ShieldAlert className="mx-auto mb-2 text-amber-600" size={24} />
+                  <p className="text-sm font-bold text-amber-900">No {activeSlot.label} ({activeSlot.position}) in this club</p>
+                  <p className="mt-1 text-xs text-amber-700">Select another open slot on the pitch or spin/reroll this club.</p>
                 </div>
               ) : (
-                recommendedPlayers.map((player) => (
-                  <button
-                    key={player.id}
-                    onClick={() => onAssign(player.id, activeSlot.id)}
-                    className="group flex w-full items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/60 p-3.5 text-left transition-all duration-150 hover:border-cyan-400/80 hover:bg-slate-800/90 active:scale-98"
-                  >
-                    <div>
-                      <p className="text-sm font-black text-white group-hover:text-cyan-200">
-                        {player.name}
-                      </p>
-                      <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
-                        <span className="font-extrabold uppercase text-cyan-400">{player.position}</span>
-                        <span>•</span>
-                        <span>{player.nationality || 'World'}</span>
+                recommendedPlayers.map((player) => {
+                  const isDrafted = draftedIds.has(player.id);
+                  return (
+                    <button
+                      key={player.id}
+                      disabled={isDrafted}
+                      onClick={() => !isDrafted && onAssign(player.id, activeSlot.id)}
+                      className={`group flex w-full items-center justify-between rounded-2xl border p-3.5 text-left transition-all duration-150 ${
+                        isDrafted
+                          ? 'border-slate-200 bg-slate-100 opacity-50 cursor-not-allowed'
+                          : 'border-slate-200 bg-slate-50 hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-sm active:scale-98'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className={`text-sm font-black ${isDrafted ? 'text-slate-500' : 'text-slate-900 group-hover:text-emerald-950'}`}>
+                            {player.name}
+                          </p>
+                          {isDrafted && (
+                            <span className="flex items-center gap-0.5 rounded-full bg-slate-200 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-slate-600">
+                              <CheckCircle2 size={10} /> Drafted
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-500">
+                          <span className="font-extrabold uppercase text-emerald-700">{player.position}</span>
+                          <span>•</span>
+                          <span>{player.nationality || 'World'}</span>
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Overall Rating Badge */}
-                    <div className="flex h-11 w-11 flex-col items-center justify-center rounded-xl border border-amber-400/40 bg-gradient-to-b from-amber-400/15 to-amber-500/5 text-amber-300">
-                      <span className="text-base font-black leading-none">{player.rating}</span>
-                      <span className="text-[7px] font-bold uppercase tracking-wider text-amber-400/80">OVR</span>
-                    </div>
-                  </button>
-                ))
+                      {/* Overall Rating Badge */}
+                      <div className="flex h-11 w-11 flex-col items-center justify-center rounded-xl border border-amber-300 bg-amber-50 text-amber-800 shadow-sm">
+                        <span className="text-base font-black leading-none">{player.rating}</span>
+                        <span className="text-[7px] font-black uppercase tracking-wider text-amber-700">OVR</span>
+                      </div>
+                    </button>
+                  );
+                })
               )}
 
               {/* Other players section */}
               {otherPlayers.length > 0 && (
                 <div className="pt-2">
-                  <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                  <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Other positions from {clubName || 'club'}
                   </p>
                   <div className="space-y-1.5 opacity-60">
                     {otherPlayers.map((player) => (
                       <div
                         key={player.id}
-                        className="flex items-center justify-between rounded-xl border border-slate-800/80 bg-slate-900/30 px-3 py-2 text-xs text-slate-400"
+                        className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600"
                       >
                         <span>{player.name} ({player.position})</span>
-                        <span className="font-semibold text-slate-300">{player.rating}</span>
+                        <span className="font-bold text-slate-800">{player.rating}</span>
                       </div>
                     ))}
                   </div>
