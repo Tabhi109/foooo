@@ -54,7 +54,7 @@ export function FootballPitch({
   };
 
   return (
-    <div className="relative mx-auto h-[600px] w-full max-w-[420px] select-none overflow-hidden rounded-[2rem] border-2 border-emerald-600/30 bg-gradient-to-b from-[#064232] via-[#053326] to-[#03231a] p-3 shadow-[0_20px_50px_rgba(0,0,0,0.25)]">
+    <div className="relative mx-auto h-[460px] sm:h-[600px] w-full max-w-[420px] select-none overflow-hidden rounded-[1.5rem] sm:rounded-[2rem] border-2 border-emerald-600/30 bg-gradient-to-b from-[#064232] via-[#053326] to-[#03231a] p-2 sm:p-3 shadow-[0_20px_50px_rgba(0,0,0,0.25)]">
       {/* Stadium Light Overlay */}
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(255,255,255,0.14),_transparent_65%)]" />
 
@@ -168,24 +168,24 @@ export function FootballPitch({
               <motion.div
                 initial={{ scale: 0.7, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                className="relative flex w-[70px] sm:w-[78px] flex-col items-center rounded-xl border border-amber-400/60 bg-white p-1.5 shadow-[0_8px_20px_rgba(0,0,0,0.35)]"
+                className="relative flex w-[60px] sm:w-[78px] flex-col items-center rounded-lg sm:rounded-xl border border-amber-400/60 bg-white p-1 sm:p-1.5 shadow-[0_8px_20px_rgba(0,0,0,0.35)]"
               >
                 {/* Top Row: OVR & Slot Position */}
-                <div className="flex w-full items-center justify-between border-b border-slate-100 pb-0.5 text-[9px] font-black leading-none">
+                <div className="flex w-full items-center justify-between border-b border-slate-100 pb-0.5 text-[8px] sm:text-[9px] font-black leading-none">
                   <span className="text-amber-600 font-black">{player.rating}</span>
-                  <span className="rounded bg-slate-900 px-1 py-0.5 text-[7px] font-black tracking-tight text-white">
+                  <span className="rounded bg-slate-900 px-0.5 sm:px-1 py-[1px] sm:py-0.5 text-[6px] sm:text-[7px] font-black tracking-tight text-white">
                     {slot.label}
                   </span>
                 </div>
 
                 {/* Player Surname in Bold High-Contrast Font */}
-                <p className="my-1 w-full truncate text-center text-[10px] font-black uppercase tracking-tight text-slate-900">
+                <p className="my-0.5 sm:my-1 w-full truncate text-center text-[9px] sm:text-[10px] font-black uppercase tracking-tight text-slate-900">
                   {player.name.split(' ').pop()}
                 </p>
 
                 {/* Bottom Row: Club & Nation Tag */}
-                <div className="flex w-full items-center justify-between border-t border-slate-100 pt-0.5 text-[7px] font-extrabold text-slate-500">
-                  <span className="truncate max-w-[34px]">{player.teamName?.slice(0, 4) || 'CLUB'}</span>
+                <div className="flex w-full items-center justify-between border-t border-slate-100 pt-0.5 text-[6px] sm:text-[7px] font-extrabold text-slate-500">
+                  <span className="truncate max-w-[26px] sm:max-w-[34px]">{player.teamName?.slice(0, 4) || 'CLUB'}</span>
                   <span className="text-emerald-600 uppercase">{player.nationality?.slice(0, 3) || 'NAT'}</span>
                 </div>
               </motion.div>
@@ -193,7 +193,7 @@ export function FootballPitch({
               /* Open Slot Tactical Ring with Drop Zone */
               <div
                 className={cn(
-                  'flex h-11 w-11 flex-col items-center justify-center rounded-full border-2 border-dashed transition-all',
+                  'flex h-10 w-10 sm:h-11 sm:w-11 flex-col items-center justify-center rounded-full border-2 border-dashed transition-all',
                   isEligibleTarget
                     ? 'border-amber-400 bg-amber-400/35 text-white shadow-[0_0_15px_rgba(245,158,11,0.6)] ring-2 ring-amber-300'
                     : isActive
